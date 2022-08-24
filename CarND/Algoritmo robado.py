@@ -27,7 +27,15 @@ from tracker import tracker
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import matplotlib.gridspec as gridspec
+import time
+from mss import mss
+from PIL import Image
 
+
+
+# screen record
+mon = {'top': 100, 'left':200, 'width':720, 'height':480}
+sct = mss()
 # %% [markdown]
 # ### I prepared the "object points", which are the three dimensions of the chessboard corners in the real world. The object points are reshaped to create "image points" which are two dimensional coordinates in the image plane. OpenCV functions findChessboardCorners() and drawChessboardCorners() were used to automatically find and draw corners in an image of a chessboard pattern.
 # 
@@ -47,7 +55,7 @@ objpoints = [] # 3d points in real world space
 imgpoints = [] # 2d points in image plane
 
 # Make a list of calibration images
-images = glob.glob('./carND/camera_cal/calibration*.jpg')
+images = glob.glob('./Drive-IT/CarND/camera_cal/calibration*.jpg')
 plt.figure(figsize = (18,12))
 grid = gridspec.GridSpec(5,4)
 # set the spacing between axes.
@@ -169,7 +177,7 @@ def window_mask(width, height, img_ref, center, level):
     output = np.zeros_like(img_ref)
     output[int(img_ref.shape[0]-(level+1)*height):int(img_ref.shape[0]-level*height), max(0,int(center-width)):min(int(center+width),img_ref.shape[1])] = 1
     return output
-image = cv2.imread('./carND/camera_cal/calibration1.jpg')
+image = cv2.imread('./Drive-IT/CarND/camera_cal/calibration1.jpg')
 img_size = (image.shape[1],image.shape[0])
 
 # Perform camera calibration with the given object and image points
@@ -179,7 +187,7 @@ ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_siz
 dist_pickle = {}
 dist_pickle["mtx"] = mtx
 dist_pickle["dist"] = dist
-pickle.dump(dist_pickle, open("./carND/camera_cal/calibration_pickle.p", "wb"))
+pickle.dump(dist_pickle, open("./Drive-IT/CarND/camera_cal/calibration_pickle.p", "wb"))
 
 #Visualize the before/after distortion on chessboard images
 undist = cv2.undistort(image, mtx, dist, None, mtx)
@@ -201,7 +209,7 @@ plt.title('Undistorted Image')
 
 # %%
 # Choose from the test images to demonstrate the before/after applying undistortion 
-testImg = cv2.imread('./carND/test_images/test5.jpg')
+testImg = cv2.imread('./Drive-IT/CarND/test_images/test5.jpg')
 testImg = cv2.cvtColor(testImg, cv2.COLOR_BGR2RGB)
 
 undistTest = cv2.undistort(testImg, mtx, dist, None, mtx)
@@ -221,7 +229,7 @@ plt.imshow(undistTest)
 plt.title('Undistorted test Image')
 
 # Read and make a list of test images
-images = glob.glob('./carND/test_images/*.jpg')
+images = glob.glob('./Drive-IT/CarND/test_images/*.jpg')
 gidx = 0
 
 for idx,fname in enumerate(images):
@@ -398,14 +406,15 @@ print("llege abajo")
 def process_image(img):
     print("entre al def")
     #undistort the image
+
     img = cv2.undistort(img,mtx,dist,None,mtx)
+    #cv2.imshow("hola", img)
     
     bot_width = .76 # percentage of bottom trapezoidal height
     mid_width = .08 # percentage of mid trapezoidal height
     height_pct = .62 # percentage of trapezoidal height
     bottom_trim= .935 # percentage from top to bottom avoiding the hood of the car
-    src = np.float32([[img.shape[1]*(0.5-mid_width/2), img.shape[0]*height_pct],[img.shape[1]*(0.5+mid_width/2),img.shape[0]*height_pct],[img.shape[1]*(0.5+bot_width/2), img.shape[0]*bottom_trim],[img.shape[1]*(0.5-bot_width/2), img.shape[0]*bottom_trim]])
-    
+ 
     warptrap = np.copy(img) #The copy owns the data and any changes made to the copy will not affect original array,
     #and any changes made to the original array will not affect the copy
     cv2.line(warptrap, (int(src[0][0]), int(src[0][1])), (int(src[1][0]), int(src[1][1])), [255,0,0], 10, cv2.LINE_AA)
@@ -544,14 +553,35 @@ def process_image(img):
     FinalScreen[720:1080,1280:1920] = cv2.resize(warpage1, (640,360), interpolation=cv2.INTER_AREA)
     FinalScreen[720:1080,0:640] = cv2.resize(windowfit, (640,360), interpolation=cv2.INTER_AREA)
     FinalScreen[720:1080,640:1280] = cv2.resize(road1, (640,360), interpolation=cv2.INTER_AREA)
-    cv2.imshow("test1", FinalScreen)
+    
+    image = np.array(FinalScreen)
+    scale_percent = 50 # percent of original size
+    width = int(1280 * scale_percent / 100)
+    height = int(720 * scale_percent / 100)
+    dim = (width, height)
+    resized = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
+    cv2.imshow("Resized image", resized)
     return FinalScreen
 while 1:
-    #foto = cv2.imread('./carND/test_images/test2.jpg')
-    fotoraw = cv2.VideoCapture(1)
-    foto = np.array(fotoraw)
+    #""""
+    sct_img = sct.grab(mon)
+    img = Image.frombytes('RGB', (sct_img.size.width, sct_img.size.height), sct_img.rgb)
+    img_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+    #cv2.imshow('test', np.array(img_bgr))
+
+    image = np.array(img_bgr)
+    width = int(1280)
+    height = int(720)
+    dim = (width, height)
+    resized = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
+    foto = np.array(resized)
+
+#"""
+    #foto = cv2.imread('./Drive-IT/CarND/test_images/test3.jpg')
+    #cv2.imshow("Pantalla", resized)
     process_image(foto)
     #print(process_image)
+    time.sleep(1)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
