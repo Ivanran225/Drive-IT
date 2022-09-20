@@ -1,22 +1,3 @@
-# %% [markdown]
-# ## The goals for this Advanced Lane Finding Project project are:
-# 
-# ### -- Compute the camera calibration matrix and distortion coefficients given a set of chessboard images.
-# ### -- Apply a distortion correction to raw images.
-# ### -- Use color transforms, gradients, etc., to create a thresholded binary image.
-# ### -- Apply a perspective transform to rectify binary image ("birds-eye view").
-# ### -- Detect lane pixels and fit to find the lane boundary.
-# ### -- Determine the curvature of the lane and vehicle position with respect to center.
-# ### -- Warp the detected lane boundaries back onto the original image.
-# ### -- Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
-
-# %% [markdown]
-# ### Python Code for the Advanced Lane Finding project:
-
-# %% [markdown]
-# ### Import the necessary packages
-
-# %%
 #from moviepy.editor import VideoFileClip
 #from IPython.display import HTML
 import numpy as np
@@ -31,17 +12,18 @@ import time
 from mss import mss
 from PIL import Image
 
-
-
+from utils import (
+    abs_sobel_thresh,
+    mag_thresh,
+    dir_threshold,
+    color_threshold,
+    s_channel_threshold,
+    window_mask,
+)
+ 
 # screen record
 mon = {'top': 100, 'left':200, 'width':720, 'height':480}
 sct = mss()
-# %% [markdown]
-# ### I prepared the "object points", which are the three dimensions of the chessboard corners in the real world. The object points are reshaped to create "image points" which are two dimensional coordinates in the image plane. OpenCV functions findChessboardCorners() and drawChessboardCorners() were used to automatically find and draw corners in an image of a chessboard pattern.
-# 
-# ### I then used the output objpoints and imgpoints to compute the camera calibration and distortion coefficients using the cv2.calibrateCamera() function. I applied this distortion correction to the test image using the cv2.undistort() function and obtained this result:
-
-# %%
 # Calibrate the Camera
 # number of inside corners in x & y directions
 nx = 9 
@@ -89,94 +71,6 @@ for idx, fname in enumerate(images):
 #plt.show()
     #plt.axis('off')
 
-
-def abs_sobel_thresh(img, orient='x', thresh_min=25, thresh_max=255):
-    # Convert to grayscale
-    # gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS).astype(np.float)
-    l_channel = hls[:,:,1]
-    s_channel = hls[:,:,2]
-    # Apply x or y gradient with the OpenCV Sobel() function
-    # and take the absolute value
-    if orient == 'x':
-        abs_sobel = np.absolute(cv2.Sobel(l_channel, cv2.CV_64F, 1, 0))
-    if orient == 'y':
-        abs_sobel = np.absolute(cv2.Sobel(l_channel, cv2.CV_64F, 0, 1))
-    # Rescale back to 8 bit integer
-    scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
-    # Create a copy and apply the threshold
-    binary_output = np.zeros_like(scaled_sobel)
-    # Here I'm using inclusive (>=, <=) thresholds, but exclusive is ok too
-    binary_output[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
-
-    # Return the result
-    return binary_output
-
-# Define a function to return the magnitude of the gradient for a given sobel kernel size and threshold values
-def mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255)):
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # Take both Sobel x and y gradients
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-    # Calculate the gradient magnitude
-    gradmag = np.sqrt(sobelx**2 + sobely**2)
-    # Rescale to 8 bit
-    scale_factor = np.max(gradmag)/255 
-    gradmag = (gradmag/scale_factor).astype(np.uint8) 
-    # Create a binary image of ones where threshold is met, zeros otherwise
-    binary_output = np.zeros_like(gradmag)
-    binary_output[(gradmag >= mag_thresh[0]) & (gradmag <= mag_thresh[1])] = 1
-
-    # Return the binary image
-    return binary_output
-
-# Define a function to threshold an image for a given range and Sobel kernel
-def dir_threshold(img, sobel_kernel=3, thresh=(0, np.pi/2)):
-    # Grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # Calculate the x and y gradients
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-    # Take the absolute value of the gradient direction, 
-    # apply a threshold, and create a binary image result
-    absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
-    binary_output =  np.zeros_like(absgraddir)
-    binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
-
-    # Return the binary image
-    return binary_output
-
-def color_threshold(image, sthresh=(0,255), vthresh=(0,255)):
-    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:,:,2]
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel > sthresh[0]) & (s_channel <= sthresh[1])] = 1
-
-    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    v_channel = hsv[:,:,2]
-    v_binary = np.zeros_like(v_channel)
-    v_binary[(v_channel > vthresh[0]) & (v_channel <= vthresh[1])] = 1
-
-    output = np.zeros_like(s_channel)
-    output[(s_binary == 1) & (v_binary) == 1] = 1
-
-    # Return the combined s_channel & v_channel binary image
-    return output
-
-def s_channel_threshold(image, sthresh=(0,255)):
-    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:, :, 2]  # use S channel
-
-    # create a copy and apply the threshold
-    binary_output = np.zeros_like(s_channel)
-    binary_output[(s_channel >= sthresh[0]) & (s_channel <= sthresh[1])] = 1
-    return binary_output
-
-def window_mask(width, height, img_ref, center, level):
-    output = np.zeros_like(img_ref)
-    output[int(img_ref.shape[0]-(level+1)*height):int(img_ref.shape[0]-level*height), max(0,int(center-width)):min(int(center+width),img_ref.shape[1])] = 1
-    return output
 image = cv2.imread('./Drive-IT/CarND/camera_cal/calibration1.jpg')
 img_size = (image.shape[1],image.shape[0])
 
@@ -206,8 +100,8 @@ plt.title('Undistorted Image')
 
 #plt.show()
 
+#################################
 
-# %%
 # Choose from the test images to demonstrate the before/after applying undistortion 
 testImg = cv2.imread('./Drive-IT/CarND/test_images/test5.jpg')
 testImg = cv2.cvtColor(testImg, cv2.COLOR_BGR2RGB)
@@ -252,7 +146,6 @@ for idx,fname in enumerate(images):
     height_pct = .62 # percentage of trapezoidal height
     bottom_trim= .935 # percentage from top to bottom avoiding the hood of the car
 
-    global src
     src = np.float32([[img.shape[1]*(0.5-mid_width/2), img.shape[0]*height_pct],[img.shape[1]*(0.5+mid_width/2),img.shape[0]*height_pct],[img.shape[1]*(0.5+bot_width/2), img.shape[0]*bottom_trim],[img.shape[1]*(0.5-bot_width/2), img.shape[0]*bottom_trim]])
     offset = img_size[0]*0.25
     dst = np.float32([[offset,0],[img_size[0]-offset,0],[img_size[0]-offset,img_size[1]],[offset,img_size[1]]])
@@ -275,146 +168,17 @@ for idx,fname in enumerate(images):
     plt.title('Undistorted Image')
 
     plt.subplot(grid[gidx+1])
-    #plt.imshow(warped, cmap="gray")
+    plt.imshow(warped, cmap="gray")
     for i in range(4):
         plt.plot(dst[i][0],dst[i][1],'rs')
     plt.title('Birds eye view')
 
 #plt.show()
 
-
-
-
-
-# %% [markdown]
-# ### It should be noted that some of the images are not plotted above because the "findChessboardCorners()" function could not find 9 x 6 inside corners inside these input images
-
-# %% [markdown]
-# ### Use the objpoints and imgpoints to compute the camera calibration and distortion coefficients using the cv2.calibrateCamera() function. This distortion correction was applied to the test image using the cv2.undistort() function. The results are shown below
-
-# %%
-# Take an image, object points, image points, and perform the camera calibration. Undistort the image after camera calibration
-        
-#load image for reference
-
-
-#plt.show()
-
-# %% [markdown]
-# ### Although it may not be visible at a first glance, a closer look at the sides of the undistorted image above shows that the radial distortion has been removed. An example where this is obvious: the white car on the right is slightly cropped along with the trees
-
-# %% [markdown]
-# ### Some useful functions are defined for experimenting with different color thresholds and gradients
-
-# %%
-# Define a function that takes an image, gradient orientation,
-# and threshold min / max values.
-
-def abs_sobel_thresh(img, orient='x', thresh_min=25, thresh_max=255):
-    # Convert to grayscale
-    # gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS).astype(np.float)
-    l_channel = hls[:,:,1]
-    s_channel = hls[:,:,2]
-    # Apply x or y gradient with the OpenCV Sobel() function
-    # and take the absolute value
-    if orient == 'x':
-        abs_sobel = np.absolute(cv2.Sobel(l_channel, cv2.CV_64F, 1, 0))
-    if orient == 'y':
-        abs_sobel = np.absolute(cv2.Sobel(l_channel, cv2.CV_64F, 0, 1))
-    # Rescale back to 8 bit integer
-    scaled_sobel = np.uint8(255*abs_sobel/np.max(abs_sobel))
-    # Create a copy and apply the threshold
-    binary_output = np.zeros_like(scaled_sobel)
-    # Here I'm using inclusive (>=, <=) thresholds, but exclusive is ok too
-    binary_output[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
-
-    # Return the result
-    return binary_output
-
-# Define a function to return the magnitude of the gradient for a given sobel kernel size and threshold values
-def mag_thresh(img, sobel_kernel=3, mag_thresh=(0, 255)):
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # Take both Sobel x and y gradients
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-    # Calculate the gradient magnitude
-    gradmag = np.sqrt(sobelx**2 + sobely**2)
-    # Rescale to 8 bit
-    scale_factor = np.max(gradmag)/255 
-    gradmag = (gradmag/scale_factor).astype(np.uint8) 
-    # Create a binary image of ones where threshold is met, zeros otherwise
-    binary_output = np.zeros_like(gradmag)
-    binary_output[(gradmag >= mag_thresh[0]) & (gradmag <= mag_thresh[1])] = 1
-
-    # Return the binary image
-    return binary_output
-
-# Define a function to threshold an image for a given range and Sobel kernel
-def dir_threshold(img, sobel_kernel=3, thresh=(0, np.pi/2)):
-    # Grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    # Calculate the x and y gradients
-    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=sobel_kernel)
-    sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=sobel_kernel)
-    # Take the absolute value of the gradient direction, 
-    # apply a threshold, and create a binary image result
-    absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
-    binary_output =  np.zeros_like(absgraddir)
-    binary_output[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 1
-
-    # Return the binary image
-    return binary_output
-
-def color_threshold(image, sthresh=(0,255), vthresh=(0,255)):
-    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:,:,2]
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel > sthresh[0]) & (s_channel <= sthresh[1])] = 1
-
-    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
-    v_channel = hsv[:,:,2]
-    v_binary = np.zeros_like(v_channel)
-    v_binary[(v_channel > vthresh[0]) & (v_channel <= vthresh[1])] = 1
-
-    output = np.zeros_like(s_channel)
-    output[(s_binary == 1) & (v_binary) == 1] = 1
-
-    # Return the combined s_channel & v_channel binary image
-    return output
-
-def s_channel_threshold(image, sthresh=(0,255)):
-    hls = cv2.cvtColor(image, cv2.COLOR_RGB2HLS)
-    s_channel = hls[:, :, 2]  # use S channel
-
-    # create a copy and apply the threshold
-    binary_output = np.zeros_like(s_channel)
-    binary_output[(s_channel >= sthresh[0]) & (s_channel <= sthresh[1])] = 1
-    return binary_output
-
-def window_mask(width, height, img_ref, center, level):
-    output = np.zeros_like(img_ref)
-    output[int(img_ref.shape[0]-(level+1)*height):int(img_ref.shape[0]-level*height), max(0,int(center-width)):min(int(center+width),img_ref.shape[1])] = 1
-    return output
-
-
-
-# %%
-# Set up the process videos function
-print("llege abajo")
 def process_image(img):
-    print("entre al def")
     #undistort the image
-
     img = cv2.undistort(img,mtx,dist,None,mtx)
-    #cv2.imshow("hola", img)
-    
-    bot_width = .76 # percentage of bottom trapezoidal height
-    mid_width = .08 # percentage of mid trapezoidal height
-    height_pct = .62 # percentage of trapezoidal height
-    bottom_trim= .935 # percentage from top to bottom avoiding the hood of the car
- 
+
     warptrap = np.copy(img) #The copy owns the data and any changes made to the copy will not affect original array,
     #and any changes made to the original array will not affect the copy
     cv2.line(warptrap, (int(src[0][0]), int(src[0][1])), (int(src[1][0]), int(src[1][1])), [255,0,0], 10, cv2.LINE_AA)
@@ -555,51 +319,41 @@ def process_image(img):
     FinalScreen[720:1080,640:1280] = cv2.resize(road1, (640,360), interpolation=cv2.INTER_AREA)
     
     image = np.array(FinalScreen)
-    scale_percent = 50 # percent of original size
-    width = int(1280 * scale_percent / 100)
-    height = int(720 * scale_percent / 100)
+    width = int(640)
+    height = int(480)
     dim = (width, height)
     resized = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
-    cv2.imshow("Resized image", resized)
+    Screen= np.array(resized)
+
+    cv2.imshow("test1", Screen)
     return FinalScreen
+
 while 1:
-    #""""
     sct_img = sct.grab(mon)
     img = Image.frombytes('RGB', (sct_img.size.width, sct_img.size.height), sct_img.rgb)
     img_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     #cv2.imshow('test', np.array(img_bgr))
 
     image = np.array(img_bgr)
-    width = int(1280)
-    height = int(720)
+    #width = int(1280)
+    #height = int(720)
+    width = int(640)
+    height = int(480)
+
     dim = (width, height)
     resized = cv2.resize(image, dim, interpolation = cv2.INTER_AREA)
-    foto = np.array(resized)
+    fotoraw= np.array(resized)
 
-#"""
-    #foto = cv2.imread('./Drive-IT/CarND/test_images/test3.jpg')
-    #cv2.imshow("Pantalla", resized)
+    #foto = cv2.imread('./Drive-IT/CarND/test_images/test2.jpg')
+    #fotoraw = cv2.VideoCapture(1)
+    foto = np.array(fotoraw)
     process_image(foto)
     #print(process_image)
-    time.sleep(1)
+    #time.sleep(1)
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
-
-#Output_video = 'output1_tracked.mp4'
-#Input_video = 'project_video.mp4'
-#Output_video = 'output_challenge_video.mp4'
-#Input_video = 'harder_challenge_video.mp4'
-#Output_video = 'output_challenge_video.mp4'
-#Input_video = 'challenge_video.mp4'
-
-#clip1 = VideoFileClip(Input_video)
-#video_clip = clip1.fl_image(process_image) # This function expects color images
-#video_clip.write_videofile(Output_video, audio=False)
+    
 
 
-# %% [markdown]
-# ### Summary: The above solution works well on the standard video. However, it needs to be improved for the challenge videos. This is because the lanes are different in the challenge video: half of the lane is a freshly paved road and is different in color with the other other half of the lane. Also, the harder challenge video has glare on the camera as a result of direct sunlight falling on it, as well as high contrast contributing to washed out lane lines. This creates problems for the algorithm. One solution would be to dynamically adjust the contrast of the image frames dynamically to ensure images are not washed out and make sure they have a good dynamic range to work with in all lighting conditions. The harder challenge videos also have roads which are curvy and have a slope which makes it difficult to warp the images properly to feed into the algorithm. This can also be addressed by creating a dynamic region of interest for each image frame. These are some of the things that need to be explored when time permits. Overall, there is a lot of trail and error process in this project which makes it quite time consuming.
-
-# %%
-
-
+#C:/Python310/python.exe -m cProfile -o algoritmico.prof .\Drive-IT\CarND\Algoritmico.py
+#py -m snakeviz .\algoritmico.prof
