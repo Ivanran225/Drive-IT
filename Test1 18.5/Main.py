@@ -7,10 +7,18 @@ from mss import mss
 import cv2
 from PIL import Image
 import numpy as np
-#from time import sleep 
-#from time import time
+import serial
+import time
+import keyboard
+
+arduino = serial.Serial(port='COM4', baudrate=9600, timeout=.1)
 mon = {'top': 30, 'left':0, 'width':720, 'height':480}
 sct = mss()
+img = cv2.VideoCapture(0)
+
+def write_read(x):
+    arduino.write(bytes(x, 'utf-8'))
+    time.sleep(0.05)
 
 def scren_record():
     sct_img = sct.grab(mon)
@@ -18,6 +26,13 @@ def scren_record():
     global img_bgr
     img_bgr = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
     #cv2.imshow('test', np.array(img_bgr))
+
+def cam_record():
+    _, cam = img.read()
+    #cv2.imshow('test', cam)
+    global img_bgr
+    img_bgr = cv2.cvtColor(np.array(cam), cv2.COLOR_RGB2BGR)
+
 
 def scale_img():
     global image, frame
@@ -60,7 +75,7 @@ def split_image_detectar_amarillo():
 
 def detectar_calcular_lineas():
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(gray,220, 255, cv2.THRESH_BINARY)
+    ret, thresh = cv2.threshold(gray,150, 255, cv2.THRESH_BINARY)
 
     izquierda = 1
     derecha = 1
@@ -89,11 +104,20 @@ def detectar_calcular_lineas():
     adividir = promedio + promedio1
     resultado = 1
     resultado = adividir/2
-
-    print(int(resultado))
-
     # se mueve de 140 a 230
     #suma los valores a una variable y la divide por la cantidad de valores que se sumaron y tenes el promedio pa
+
+    print(int(resultado))
+    alignment_limits = (130, 180)
+    centro = 150
+    if centro < alignment_limits[0]:
+        movement = "a"
+    elif centro > alignment_limits[1]:
+        movement = "d"
+    else:
+        movement = "w"
+
+    write_read(movement)
 
     cv2.imshow("Blanco", thresh)
 
@@ -104,8 +128,8 @@ def changed_perspective():
     result = cv2.warpPerspective(np.array(img_bgr), matrix, (720, 480))
     # Wrap the transformed image
 
-while 1:
-    scren_record()
+while True:
+    cam_record()
 
     scale_img()
 
@@ -114,6 +138,8 @@ while 1:
     detectar_calcular_lineas()
 
     #changed_perspective()
+
+    #cv2.imshow('Changed perspective', result) # Transformed Capture
+
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
-    #cv2.imshow('Changed perspective', result) # Transformed Capture
